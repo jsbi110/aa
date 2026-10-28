@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- 실행 시 브라우저 탭 이름: ⇀ -->
+    <title>⇀</title>
+    <style>
+        /* 모든 요소의 여백 및 높이 엄격 초기화 */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            touch-action: manipulation;
+        }
+
+        html, body {
+            background-color: #ffffff;
+            color: #000000;
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 16px;
+            line-height: 1.0;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        /* 3줄 텍스트 컨테이너 - 줄간격 및 여백 완전 제로화 */
+        #terminal {
+            margin: 0;
+            padding: 0;
+            line-height: 1.0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .line {
+            display: block;
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1.0 !important;
+            height: 16px !important; /* 글자 크기와 동일하게 높이 고정하여 줄 간격 제거 */
+            font-size: 16px;
+            white-space: pre;
+        }
+
+        /* 3번째 줄 바로 밑에 밀착된 버튼 영역 */
+        #touch-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0;
+            margin-top: 10px;
+            padding: 0;
+        }
+
+        .dpad-row {
+            display: flex;
+            justify-content: flex-start;
+            gap: 0;
+            margin: 0;
+            padding: 0;
+        }
+
+        .btn {
+            background: #ffffff;
+            color: #000000;
+            border: 1px solid #000000;
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 13px;
+            width: 32px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            outline: none;
+            border-radius: 0;
+            margin: 0;
+            padding: 0;
+        }
+
+        .btn:active {
+            background: #000000;
+            color: #ffffff;
+        }
+
+        .btn-end {
+            width: 96px;
+            height: 26px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div id="terminal">
+        <div id="line1" class="line">최고점수 : 0.00</div>
+        <div id="line2" class="line">이전점수 : 0.00</div>
+        <div id="line3" class="line">⇀</div>
+    </div>
+
+    <!-- 3번째 줄 바로 아래 밀착된 방향키/종료 버튼 -->
+    <div id="touch-controls">
+        <div class="dpad-row">
+            <button class="btn" id="btn-up" style="margin-left: 32px;" aria-label="Up">↾</button>
+        </div>
+        <div class="dpad-row">
+            <button class="btn" id="btn-left" aria-label="Left">↼</button>
+            <button class="btn" id="btn-down" aria-label="Down">⇃</button>
+            <button class="btn" id="btn-right" aria-label="Right">⇀</button>
+        </div>
+        <div class="dpad-row">
+            <button class="btn btn-end" id="btn-space">종료하기</button>
+        </div>
+    </div>
+
+    <script>
+        const ARROWS = [
+            { symbol: '⇀', key: 'ArrowRight' },
+            { symbol: '↼', key: 'ArrowLeft' },
+            { symbol: '↾', key: 'ArrowUp' },
+            { symbol: '⇃', key: 'ArrowDown' }
+        ];
+
+        let highScore = parseFloat(localStorage.getItem('cmd_arrow_highscore')) || 0.00;
+        let prevScore = 0.00;
+
+        let currentTarget = null;
+        let successCount = 0;
+        let startTime = null;
+        let isRunning = false;
+        let isEnded = false;
+
+        const elLine1 = document.getElementById('line1');
+        const elLine2 = document.getElementById('line2');
+        const elLine3 = document.getElementById('line3');
+
+        function getRandomArrow() {
+            return ARROWS[Math.floor(Math.random() * ARROWS.length)];
+        }
+
+        function formatNumber(num) {
+            return num.toFixed(2);
+        }
+
+        function render() {
+            elLine1.textContent = `최고점수 : ${formatNumber(highScore)}`;
+            elLine2.textContent = `이전점수 : ${formatNumber(prevScore)}`;
+            if (isEnded) {
+                elLine3.textContent = '종료되었습니다.';
+            } else if (currentTarget) {
+                elLine3.textContent = currentTarget.symbol;
+            }
+        }
+
+        function startNewRound() {
+            successCount = 0;
+            startTime = null;
+            isRunning = false;
+            isEnded = false;
+            currentTarget = getRandomArrow();
+            render();
+        }
+
+        function endRound() {
+            let score = 0.00;
+
+            if (isRunning && startTime && successCount > 0) {
+                const elapsedSeconds = (performance.now() - startTime) / 1000;
+                const cps = elapsedSeconds > 0 ? (successCount / elapsedSeconds) : 0;
+                score = successCount * cps;
+
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('cmd_arrow_highscore', highScore);
+                }
+            }
+
+            prevScore = score;
+            isEnded = true;
+            render();
+        }
+
+        function handleInput(keyName) {
+            // '종료되었습니다.' 상태에서는 아무 키(j, z, x, WASD, 방향키, 스페이스바, 터치 등)나 입력 시 즉시 새 화살표 표시
+            if (isEnded) {
+                startNewRound();
+                return;
+            }
+
+            // '종료하기' / 스페이스바 입력 시 즉시 종료
+            if (keyName === ' ') {
+                endRound();
+                return;
+            }
+
+            // WASD 입력 매핑
+            let normalizedKey = keyName;
+            if (['w', 'W'].includes(keyName)) normalizedKey = 'ArrowUp';
+            if (['a', 'A'].includes(keyName)) normalizedKey = 'ArrowLeft';
+            if (['s', 'S'].includes(keyName)) normalizedKey = 'ArrowDown';
+            if (['d', 'D'].includes(keyName)) normalizedKey = 'ArrowRight';
+
+            // 방향키 및 WASD 입력 검증
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(normalizedKey)) {
+                if (normalizedKey === currentTarget.key) {
+                    if (!isRunning) {
+                        isRunning = true;
+                        startTime = performance.now();
+                    }
+                    successCount++;
+                    currentTarget = getRandomArrow();
+                    render();
+                } else {
+                    endRound();
+                }
+            }
+        }
+
+        // 키보드 이벤트 Listener
+        window.addEventListener('keydown', (e) => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+                e.preventDefault();
+            }
+            handleInput(e.key);
+        });
+
+        // 모바일 터치 이벤트 처리
+        function attachTouchHandler(elementId, keyName) {
+            const btn = document.getElementById(elementId);
+            let handled = false;
+
+            btn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                handled = true;
+                handleInput(keyName);
+            }, { passive: false });
+
+            btn.addEventListener('click', (e) => {
+                if (!handled) {
+                    handleInput(keyName);
+                }
+                handled = false;
+            });
+        }
+
+        attachTouchHandler('btn-up', 'ArrowUp');
+        attachTouchHandler('btn-left', 'ArrowLeft');
+        attachTouchHandler('btn-down', 'ArrowDown');
+        attachTouchHandler('btn-right', 'ArrowRight');
+        attachTouchHandler('btn-space', ' ');
+
+        // 초기 시작
+        startNewRound();
+    </script>
+</body>
+</html>
